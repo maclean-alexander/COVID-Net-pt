@@ -10,7 +10,7 @@ import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
  
-def get_dataloader(csv_file, datadir, batch_size=8, transform='base'):
+def get_dataloader(csv_file, datadir, batch_size=8, transform='base', is_classification=False, bin_map=None):
  
     rescale = transforms.Compose([Rescale((480, 480))])
  
@@ -37,13 +37,16 @@ def get_dataloader(csv_file, datadir, batch_size=8, transform='base'):
     dataset = COVIDNetDataset(
             csv_file,
             datadir,
-            transform)
+            transform,
+            bin_map=bin_map,
+            is_classification=is_classification)
  
     dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=True,
             num_workers=0)
+            
  
     return dataloader
  
@@ -51,12 +54,13 @@ def get_dataloader(csv_file, datadir, batch_size=8, transform='base'):
 class COVIDNetDataset(Dataset):
     '''General dataset for COVIDNet'''
  
-    def __init__(self, csv_file, datadir, transform=None, bin_map=np.array([[0.0,3.0], [3.0,6.0], [6.0,8.0]])):
+    def __init__(self, csv_file, datadir, transform=None, bin_map=None, is_classification=False):
         # TODO confirm that csv_file for CXR Sev data works with this
         self.df = pd.read_csv(csv_file, header=None, sep=' ')
         self.datadir = datadir
         self.transform = transform
         self.bin_map = bin_map
+        self.is_classification = is_classification
  
     def __len__(self):
         return len(self.df)
@@ -70,8 +74,13 @@ class COVIDNetDataset(Dataset):
         image = io.imread(img_name)
        
         # For CXR, geo label is at index 2 and opc label is at index 3
-        geo_label = _categorize_severity(self.df.iloc[idx, 2], bin_map=self.bin_map)
-        opc_label = _categorize_severity(self.df.iloc[idx, 3], bin_map=self.bin_map)
+        geo_label = self.df.iloc[idx, 2]
+        opc_label = self.df.iloc[idx, 3]
+
+        # If classification, assign labels to appropriate bins
+        if self.is_classification:
+            geo_label = _categorize_severity(geo_label, bin_map=self.bin_map)
+            opc_label = _categorize_severity(opc_label, bin_map=self.bin_map)
 
     
         #Dict holds GEO and OPC data

@@ -13,6 +13,8 @@ import warnings
 warnings.filterwarnings('ignore')
  
 from dataset import get_dataloader
+
+#from darwinai.torch.builder import build_model
  
 parser = argparse.ArgumentParser(description='COVID-Net-CXR pytorch training script')
 parser.add_argument('--datadir', default='../montefiore_severity/CXR')
@@ -31,6 +33,8 @@ if measure == 'invalid': raise ValueError
  
 NUM_CLASSES = 3
 BATCH_SIZE = 16
+bin_map = np.array([[0.0,3.0], [3.0,6.0], [6.0,8.0]])
+is_classification = True
  
 device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
  
@@ -41,17 +45,22 @@ run_path = output_path + run_id
 pathlib.Path(run_path).mkdir(parents=True, exist_ok=True)
 print('Output: ' + run_path)
  
+
 train_dataloader = get_dataloader(
         csv_file=args.trainfile,
         datadir=args.datadir,
         batch_size=BATCH_SIZE,
-        transform='base')
+        transform='base',
+        bin_map=bin_map,
+        is_classification=is_classification)
  
 valid_dataloader = get_dataloader(
         csv_file=args.validfile,
         datadir=args.datadir,
         batch_size=1,
-        transform=None) # no augmentations
+        transform=None,
+        bin_map=bin_map,
+        is_classification=is_classification) # no augmentations
  
 dataloaders = {'train':train_dataloader, 'val':valid_dataloader}
 dataset_sizes = {'train':len(train_dataloader)*BATCH_SIZE, 'val':len(valid_dataloader)}
