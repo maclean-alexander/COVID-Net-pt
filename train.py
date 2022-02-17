@@ -12,6 +12,10 @@ from torchvision import models
 import warnings
 warnings.filterwarnings('ignore')
 
+from darwin_net.architectures.DarwinNet_groups4 import DarwinNetV2
+from darwinai.torch.builder import build_model  # , BlockSpec, BuildMetrics
+from darwinai.builder import BlockSpec
+from darwin.enums.enums import BuildMetrics
 from dataset import get_dataloader
 
 parser = argparse.ArgumentParser(description='COVID-Net-US pytorch training script')
@@ -117,19 +121,24 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=20):
     model.load_state_dict(best_model_wts)
     return model
 
-model_ft = models.resnet50(pretrained=True)
-num_ftrs = model_ft.fc.in_features
+gsbuild_config = {
+        "blockspecs": [
+            BlockSpec(channels=40, depth=3),
+            BlockSpec(channels=84, depth=4),
+            BlockSpec(channels=176, depth=7),
+            BlockSpec(channels=372, depth=3),
+            ]
+        }
+INPUT_SHAPE = [480, 480, 3]
 
-print(num_ftrs)
-
-model_ft.fc = nn.Linear(num_ftrs, NUM_CLASSES)
-model_ft = model_ft.to(device)
+model = DarwinNetV2(gsbuild_config['blockspecs'], INPUT_SHAPE, NUM_CLASSES)
+model = model.to(device)
 
 # initial basic training parameters
 criterion = nn.CrossEntropyLoss()
-optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+optimizer_ft = optim.Adam(model.parameters(), lr=0.001)
 exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
-model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, num_epochs=20)
+model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler, num_epochs=20)
 
-torch.save(model_ft.state_dict(), os.path.join(run_path, 'model'))
+torch.save(model.state_dict(), os.path.join(run_path, 'model'))
