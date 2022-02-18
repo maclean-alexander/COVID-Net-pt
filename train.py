@@ -8,13 +8,21 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision import models
- 
+
 import warnings
 warnings.filterwarnings('ignore')
+
+from darwin_net.architectures.DarwinNet_groups4 import DarwinNetV2
+from darwinai.torch.builder import build_model  # , BlockSpec, BuildMetrics
+from darwinai.builder import BlockSpec
+from darwin.enums.enums import BuildMetrics
  
 from dataset import get_dataloader
 
-#from darwinai.torch.builder import build_model
+
+NUM_CLASSES = 3
+BATCH_SIZE = 16
+
  
 parser = argparse.ArgumentParser(description='COVID-Net-CXR pytorch training script')
 parser.add_argument('--datadir', default='../montefiore_severity/CXR')
@@ -24,6 +32,8 @@ parser.add_argument('--testfile', default='../../alex.maclean/montefiore_severit
 parser.add_argument('--name', default='covid_net_model')
 parser.add_argument('--geo', action='store_true', default=False)
 parser.add_argument('--opc', action='store_true', default=False)
+parser.add_argument('--modelfile', default=None)
+parser.add_argument('--resnet', default=False)
  
 args = parser.parse_args()
 
@@ -31,8 +41,7 @@ args = parser.parse_args()
 measure = 'geo' if args.geo else 'opc' if args.opc else 'invalid'
 if measure == 'invalid': raise ValueError
  
-NUM_CLASSES = 3
-BATCH_SIZE = 16
+
 bin_map = np.array([[0.0,3.0], [3.0,6.0], [6.0,8.0]])
 is_classification = True
  
@@ -133,12 +142,31 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=20):
     model.load_state_dict(best_model_wts)
     return model
  
-model_ft = models.resnet50(pretrained=True)
-num_ftrs = model_ft.fc.in_features
- 
-print(num_ftrs)
- 
-model_ft.fc = nn.Linear(num_ftrs, NUM_CLASSES)
+if args.resnet:
+    model_ft = models.resnet50(pretrained=True)
+    num_ftrs = model_ft.fc.in_features
+    
+    print(num_ftrs)
+
+    model_ft.fc = nn.Linear(num_ftrs, NUM_CLASSES)
+
+    # Load model weights
+    if args.modelfile:
+        print("Using model: " + str(args.modelfile))
+        model_ft.load_state_dict(torch.load(os.path.join(args.modelfile, 'model')))
+else:
+    gsbuild_config = {
+        "blockspecs": [
+            BlockSpec(channels=40, depth=3),
+            BlockSpec(channels=84, depth=4),
+            BlockSpec(channels=176, depth=7),
+            BlockSpec(channels=372, depth=3),
+            ]
+        }
+    INPUT_SHAPE = [480, 480, 3]
+
+    model_ft = DarwinNetV2(gsbuild_config['blockspecs'], INPUT_SHAPE, NUM_CLASSES)
+
 model_ft = model_ft.to(device)
  
 # initial basic training parameters
